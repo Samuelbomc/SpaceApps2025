@@ -12,6 +12,14 @@
 #include <sstream>
 
 namespace server {
-	void open_browser(const std::string& url);
-	int run_server();
+	class manager {
+	public:
+		int run_server();
+		const crow::json::rvalue& get_last_data() const;
+
+	private:
+		void open_browser(const std::string& url);
+		mutable std::mutex data_mutex_;
+		crow::json::rvalue last_data_;
+	};
 } // namespace server

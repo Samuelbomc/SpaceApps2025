@@ -1,7 +1,7 @@
 #include "manager.h"
 
 namespace server {
-    void open_browser(const std::string& url) {
+    void manager::open_browser(const std::string& url) {
         // Wait a moment for the server to start
         std::this_thread::sleep_for(std::chrono::seconds(2));
         std::cout << "Attempting to open browser at: " << url << std::endl;
@@ -19,8 +19,8 @@ namespace server {
 
         system(command.c_str());
     }
-    int run_server() {
-        // Initialize a Crow application instance
+
+    int manager::run_server() {
         crow::App<crow::CORSHandler> app;
 
         // --- Configure CORS Middleware ---
@@ -52,26 +52,22 @@ namespace server {
 
         // --- POST Route ---
         CROW_ROUTE(app, "/api/process").methods("POST"_method)
-            ([](const crow::request& req) {
-            // Load and validate the JSON from the request body
+            ([this](const crow::request& req) {
             auto data = crow::json::load(req.body);
-            if (!data || !data.has("name")) {
-                return crow::response(400, "Invalid JSON or missing 'name' field.");
+            if (!data) {
+                return crow::response(400, "Invalid JSON.");
             }
 
-            // Safely extract data from the JSON object
-            std::string user_name = data["name"].s();
-            int user_age = data.has("age") ? data["age"].i() : 0;
+            {
+                std::lock_guard<std::mutex> lock(data_mutex_);
+                last_data_ = data;
+            }
 
-            std::cout << "Received data: Name = " << user_name << ", Age = " << user_age << std::endl;
-
-            // Prepare a JSON response
             crow::json::wvalue response_json;
             response_json["status"] = "success";
-            response_json["message"] = "Processed data for " + user_name + ".";
+            response_json["message"] = "Processed data.";
             response_json["timestamp"] = time(nullptr);
 
-            // Crow automatically sets the Content-Type to application/json
             return crow::response(200, response_json);
                 });
 
@@ -79,19 +75,21 @@ namespace server {
         const int PORT = 18080;
         const std::string SERVER_URL = "http://localhost:" + std::to_string(PORT) + "/";
 
-        // Run the server in a separate thread.
         std::thread server_thread([&]() {
             std::cout << "Server starting on port " << PORT << "..." << std::endl;
             app.port(PORT).multithreaded().run();
             });
 
-        // Open the browser in a separate thread.
-        std::thread browser_thread(open_browser, SERVER_URL);
+        std::thread browser_thread(&manager::open_browser, this, SERVER_URL);
 
-        // Wait for both threads to complete.
         server_thread.join();
         browser_thread.join();
 
         return 0;
+    }
+
+    const crow::json::rvalue& manager::get_last_data() const {
+        std::lock_guard<std::mutex> lock(data_mutex_);
+        return last_data_;
     }
 } // namespace server

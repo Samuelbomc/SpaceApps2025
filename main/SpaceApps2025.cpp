@@ -2,11 +2,11 @@
 
 int main()
 {
-	std::thread server_thread(server::run_server);
-	std::thread function_thread(test);
-	server_thread.join();
-	function_thread.join();
+    server::manager mgr;
 
-	return 0;
+    std::thread server_thread(&server::manager::run_server, &mgr);
+
+    server_thread.join();
+
+    return 0;
 }
-
