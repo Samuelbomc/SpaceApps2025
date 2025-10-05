@@ -1,34 +1,49 @@
 ﻿#include "SpaceApps2025.h"
 
+void print_vector(const std::vector<float>& vec) {
+    std::cout << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        std::cout << vec[i] << (i == vec.size() - 1 ? "" : ", ");
+    }
+    std::cout << "]" << std::endl;
+}
+
 int main() {
-    // --- Create a DNN for the XOR problem ---
-    // Input size: 2, Output size: 2 (for [1,0] and [0,1]), Hidden Layers: 1 layer of 3 neurons
-    DNN network(2, 2, { 3 });
-
-    // --- Training Data (XOR) ---
+    // XOR problem
     std::vector<std::vector<float>> inputs = {
-        {0.0f, 0.0f},
-        {0.0f, 1.0f},
-        {1.0f, 1.0f}
+        {0, 0},
+        {0, 1},
+        {1, 0},
+        {1, 1}
     };
-    // One-hot encoded targets: 0 -> [1,0], 1 -> [0,1]
     std::vector<std::vector<float>> targets = {
-        {1.0f, 0.0f}, // 0
-        {0.0f, 1.0f}, // 1
-        {1.0f, 0.0f}  // 0
+        {1, 0}, // 0
+        {0, 1}, // 1
+        {0, 1}, // 1
+        {1, 0}  // 0
     };
 
-    // --- Train the network ---
+    int input_size = 2;
+    int output_size = 2;
+    std::vector<int> hidden_layers = { 3 };
+
+    DNN nn(input_size, output_size, hidden_layers);
+
+    int epochs = 400;
+    float learning_rate = 0.1;
+
     std::cout << "Starting training..." << std::endl;
-    network.train(inputs, targets, 200, 0.1f);
+    nn.train(inputs, targets, epochs, learning_rate);
     std::cout << "Training complete." << std::endl;
     std::cout << "--------------------" << std::endl;
-
-    // --- Test the trained network ---
     std::cout << "Testing predictions:" << std::endl;
+
     for (const auto& input : inputs) {
-        std::vector<float> prediction = network.forward(input);
-        std::cout << "Input: [" << input[0] << ", " << input[1] << "], Prediction: [" << prediction[0] << ", " << prediction[1] << "]" << std::endl;
+        std::vector<float> prediction = nn.forward(input);
+        std::cout << "Input: ";
+        print_vector(input);
+        std::cout << "Prediction: ";
+        print_vector(prediction);
     }
 
     return 0;

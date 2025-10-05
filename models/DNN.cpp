@@ -103,7 +103,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
             const auto& input = inputs[i];
             const auto& target = targets[i];
 
-            // --- 1. Forward Pass (storing intermediate values) ---
+            // --- 1. Forward Pass ---
             std::vector<std::vector<float>> activations;
             activations.push_back(input);
 
@@ -169,7 +169,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                 total_loss -= target[j] * std::log(activations.back()[j] + 1e-9);
             }
 
-            // --- 2. Backward Pass (Corrected Logic) ---
+            // --- 2. Backward Pass ---
             std::vector<float> delta = activations.back();
             for (size_t j = 0; j < delta.size(); ++j) delta[j] -= target[j];
 
@@ -177,7 +177,6 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                 const auto& current_activations = activations[layer + 1];
                 const auto& prev_activations = activations[layer];
 
-                // Calculate gradients for current layer's weights and biases
                 std::vector<float> nabla_b = delta;
                 std::vector<float> nabla_w(prev_activations.size() * delta.size());
                 for (size_t j = 0; j < delta.size(); ++j) {
@@ -186,7 +185,6 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                     }
                 }
 
-                // Calculate delta for the previous layer's output (before activation derivative)
                 std::vector<float> prev_delta(prev_activations.size(), 0.0f);
                 if (layer > 0) {
                     for (size_t j = 0; j < prev_activations.size(); ++j) {
@@ -196,12 +194,9 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                     }
                 }
 
-                // Update current layer's weights and biases
                 for (size_t j = 0; j < weights[layer].size(); ++j) weights[layer][j] -= learning_rate * nabla_w[j];
                 for (size_t j = 0; j < biases[layer].size(); ++j) biases[layer][j] -= learning_rate * nabla_b[j];
 
-                // If the previous layer's output was from the attention mechanism,
-                // backpropagate through attention.
                 if (layer == 1 && !hidden_layers.empty()) {
                     auto& delta_for_context = prev_delta;
                     int hidden_size = hidden_activations_pre_attention.size();
@@ -242,9 +237,8 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                     prev_delta = delta_pre_attention;
                 }
 
-                // Apply the activation derivative to the delta
                 if (layer > 0) {
-                    const auto& derivative = tanh_derivative((layer == 1 && !hidden_layers.empty()) ? hidden_activations_pre_attention : current_activations);
+                    const auto& derivative = tanh_derivative((layer == 1 && !hidden_layers.empty()) ? hidden_activations_pre_attention : prev_activations);
                     for (size_t j = 0; j < prev_delta.size(); ++j) {
                         prev_delta[j] *= derivative[j];
                     }
@@ -284,4 +278,3 @@ std::vector<float> DNN::tanh_derivative(const std::vector<float>& activated_outp
 float DNN::sigmoid_derivative(float activated_output) {
     return activated_output * (1.0f - activated_output);
 }
-
