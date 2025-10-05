@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Frontend</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        input {
+            padding: 8px;
+        }
+
+        button {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Web Application Interface</h1>
+    <p>Use this form to interact with the C++ backend.</p>
+
+    <form id="dataForm">
+        <div>
+            <label for="name">Your Name:</label>
+            <input type="text" id="name" name="name" placeholder="Enter your name" required>
+        </div>
+        <div>
+            <label for="age">Your Age (Optional):</label>
+            <input type="number" id="age" name="age" placeholder="Enter your age">
+        </div>
+        <button type="submit">Submit Data</button>
+    </form>
+
+    <h2>Server Response</h2>
+    <pre id="responseArea">Server response will appear here.</pre>
+
+    <script>
+        document.getElementById('dataForm').addEventListener('submit', async function (event) {
+            event.preventDefault();
+
+            const name = document.getElementById('name').value;
+            const ageInput = document.getElementById('age').value;
+            const responseArea = document.getElementById('responseArea');
+
+            const data = { name };
+            if (ageInput) {
+                data.age = parseInt(ageInput, 10);
+            }
+
+            responseArea.textContent = 'Processing...';
+
+            try {
+                const response = await fetch('http://localhost:18080/api/process', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const responseData = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(responseData.error || `HTTP error! Status: ${response.status}`);
+                }
+
+                responseArea.textContent = JSON.stringify(responseData, null, 2);
+
+            } catch (error) {
+                responseArea.textContent = 'Error: ' + error.message;
+            }
+        });
+    </script>
+
+</body>
+</html>
+
+

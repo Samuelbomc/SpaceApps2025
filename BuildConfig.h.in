@@ -1,0 +1,4 @@
+#pragma once
+
+#define BUILD_PATH "@CMAKE_CURRENT_BINARY_DIR@"
+#define SOURCE_PATH "@CMAKE_CURRENT_SOURCE_DIR@"
