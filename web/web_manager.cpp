@@ -1,7 +1,7 @@
-#include "manager.h"
+#include "web_manager.h"
 
 namespace server {
-    void manager::open_browser(const std::string& url) {
+    void web_manager::open_browser(const std::string& url) {
         // Wait a moment for the server to start
         std::this_thread::sleep_for(std::chrono::seconds(2));
         std::cout << "Attempting to open browser at: " << url << std::endl;
@@ -20,8 +20,9 @@ namespace server {
         system(command.c_str());
     }
 
-    int manager::run_server() {
+    int web_manager::run_server() {
         crow::App<crow::CORSHandler> app;
+        data::data_manager data_mgr;
 
         // --- Configure CORS Middleware ---
         auto& cors = app.get_middleware<crow::CORSHandler>();
@@ -52,7 +53,7 @@ namespace server {
 
         // --- POST Route ---
         CROW_ROUTE(app, "/api/process").methods("POST"_method)
-            ([this](const crow::request& req) {
+            ([this, &data_mgr](const crow::request& req) {
             auto data = crow::json::load(req.body);
             if (!data) {
                 return crow::response(400, "Invalid JSON.");
@@ -62,6 +63,8 @@ namespace server {
                 std::lock_guard<std::mutex> lock(data_mutex_);
                 last_data_ = data;
             }
+
+            data_mgr.read_user_input(*this);
 
             crow::json::wvalue response_json;
             response_json["status"] = "success";
@@ -80,7 +83,7 @@ namespace server {
             app.port(PORT).multithreaded().run();
             });
 
-        std::thread browser_thread(&manager::open_browser, this, SERVER_URL);
+        std::thread browser_thread(&web_manager::open_browser, this, SERVER_URL);
 
         server_thread.join();
         browser_thread.join();
@@ -88,7 +91,7 @@ namespace server {
         return 0;
     }
 
-    const crow::json::rvalue& manager::get_last_data() const {
+    const crow::json::rvalue& web_manager::get_last_data() const {
         std::lock_guard<std::mutex> lock(data_mutex_);
         return last_data_;
     }

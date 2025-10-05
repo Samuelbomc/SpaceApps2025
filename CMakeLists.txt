@@ -15,7 +15,7 @@ configure_file(
   @ONLY
 )
 
-add_executable (SpaceApps2025 "main/SpaceApps2025.cpp" "main/SpaceApps2025.h" "models/attention.h" "models/attention.cpp" "web_manager/manager.h" "web_manager/manager.cpp" "data/data_manager.h" "data/data_manager.cpp")
+add_executable (SpaceApps2025 "main/SpaceApps2025.cpp" "main/SpaceApps2025.h" "models/attention.h" "models/attention.cpp" "web/web_manager.h" "web/web_manager.cpp" "data/data_manager.h" "data/data_manager.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET SpaceApps2025 PROPERTY CXX_STANDARD 20)
