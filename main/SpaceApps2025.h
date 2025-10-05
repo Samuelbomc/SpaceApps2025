@@ -13,7 +13,7 @@ void train_model(std::string model) {
 	if (model == "K2") {
 		try {
 			std::filesystem::path sourcePathFs(SOURCE_PATH);
-			auto k2Path = sourcePathFs / "data" / "k2.csv"; // Ensure correct filename
+			auto k2Path = sourcePathFs / "data" / "k2.csv";
 
 			std::cout << "Loading, shuffling, and splitting K2 data..." << std::endl;
 			auto datasets = dm.load_and_split_k2_data(k2Path.string(), 0.8f);
@@ -29,12 +29,12 @@ void train_model(std::string model) {
 
 			int input_size = datasets.training_inputs[0].size();
 			int output_size = datasets.training_targets[0].size();
-			std::vector<int> hidden_layers = { 4, 4 };
+			std::vector<int> hidden_layers = { 10, 5 };
 
 			DNN network(input_size, output_size, hidden_layers);
 
 			std::cout << "\nStarting training on K2 data..." << std::endl;
-			network.train(datasets.training_inputs, datasets.training_targets, 200, 0.01f);
+			network.train(datasets.training_inputs, datasets.training_targets, 500, 0.005f);
 			std::cout << "Training complete." << std::endl;
 			std::cout << "--------------------" << std::endl;
 
