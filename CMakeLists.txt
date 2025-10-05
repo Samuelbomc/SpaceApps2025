@@ -19,7 +19,7 @@ configure_file(
 )
 
 # Add source to this project's executable.
-add_executable (SpaceApps2025 "main/SpaceApps2025.cpp" "main/SpaceApps2025.h")
+add_executable (SpaceApps2025 "main/SpaceApps2025.cpp" "main/SpaceApps2025.h" "models/attention.h" "models/attention.cpp")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET SpaceApps2025 PROPERTY CXX_STANDARD 20)
