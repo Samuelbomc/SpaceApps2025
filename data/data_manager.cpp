@@ -105,6 +105,7 @@ namespace data {
 		while (std::getline(file, line)) {
 			auto row = split_csv_line(line);
 			if (row.size() <= k2_useful_feature_indices.back()) continue;
+			if (row[k2_target_column_index] != "CONFIRMED" && row[k2_target_column_index] != "FALSE POSITIVE") continue;
 
 			std::vector<std::string> feature_row;
 			for (int idx : k2_useful_feature_indices) {
@@ -115,7 +116,7 @@ namespace data {
 			if (row[k2_target_column_index] == "CONFIRMED") {
 				all_targets.push_back({ 1.0f, 0.0f });
 			}
-			else {
+			else if (row[k2_target_column_index] == "FALSE POSITIVE") {
 				all_targets.push_back({ 0.0f, 1.0f });
 			}
 		}

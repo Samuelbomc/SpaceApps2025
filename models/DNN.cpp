@@ -1,6 +1,5 @@
 #include "DNN.h"
 
-// --- Constructor ---
 DNN::DNN(int input_sequence_length, int num_classes,
     const std::vector<int>& hidden_layers,
     int num_filters, int filter_size, int attention_dim) {
@@ -8,20 +7,19 @@ DNN::DNN(int input_sequence_length, int num_classes,
     this->num_filters = num_filters;
     this->filter_size = filter_size;
     this->attention_dim = attention_dim;
+    this->num_classes = num_classes;
     this->generator = std::mt19937(std::random_device{}());
 
-    // --- 1. Initialize CNN Layer ---
-    // The total number of weights is filter_size * num_filters.
+    // 1. Initialize CNN Layer
     conv_weights = xavier_weights(filter_size, num_filters);
     conv_biases = zero_biases(num_filters);
 
-    // --- 2. Calculate the size of the flattened layer (input to dense layers) ---
+    // 2. Calculate the size of the flattened layer (input to dense layers)
     int conv_output_length = input_sequence_length - filter_size + 1;
-    // Max pooling with a pool size/stride of 2 halves the length.
     int pool_output_length = conv_output_length / 2;
     int flattened_size = pool_output_length * num_filters;
 
-    // --- 3. Initialize Dense and Attention Layers ---
+    // 3. Initialize Dense and Attention Layers
     if (hidden_layers.empty()) {
         throw std::invalid_argument("Hybrid model requires at least one hidden layer for attention.");
     }
@@ -32,25 +30,20 @@ DNN::DNN(int input_sequence_length, int num_classes,
         dense_weights.push_back(xavier_weights(last_layer_size, hidden_size));
         dense_biases.push_back(zero_biases(hidden_size));
 
-        // Initialize attention weights to be applied after the first hidden layer
+        // Initialize attention weights for the first hidden layer
         if (i == 0) {
             W_q = xavier_weights(hidden_size, attention_dim);
             W_k = xavier_weights(hidden_size, attention_dim);
-            // The output of attention gating has the same dimension as the hidden layer
-            last_layer_size = hidden_size;
         }
-        else {
-            last_layer_size = hidden_size;
-        }
+        last_layer_size = hidden_size;
     }
     // Final classification layer
     dense_weights.push_back(xavier_weights(last_layer_size, num_classes));
     dense_biases.push_back(zero_biases(num_classes));
 }
 
-// --- Forward Pass ---
 std::vector<float> DNN::forward(const std::vector<float>& input) {
-    // --- 1. Convolutional Layer ---
+    // 1. Convolutional Layer
     int conv_output_length = input.size() - filter_size + 1;
     std::vector<float> conv_output(conv_output_length * num_filters);
     for (int f = 0; f < num_filters; ++f) {
@@ -60,12 +53,11 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
                 sum += input[i + j] * conv_weights[f * filter_size + j];
             }
             sum += conv_biases[f];
-            // Apply tanh activation and store in [length, filter] format
             conv_output[i * num_filters + f] = std::tanh(sum);
         }
     }
 
-    // --- 2. Max Pooling Layer ---
+    // 2. Max Pooling Layer
     int pool_output_length = conv_output_length / 2;
     std::vector<float> pool_output(pool_output_length * num_filters);
     for (int f = 0; f < num_filters; ++f) {
@@ -78,8 +70,8 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
         }
     }
 
-    // --- 3. Dense & Attention Layers ---
-    std::vector<float> current_activation = pool_output; // Start with the flattened features from the CNN
+    // 3. Dense & Attention Layers
+    std::vector<float> current_activation = pool_output;
     for (size_t layer = 0; layer < dense_weights.size(); ++layer) {
         const auto& w = dense_weights[layer];
         const auto& b = dense_biases[layer];
@@ -87,7 +79,6 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
         int input_size = current_activation.size();
         std::vector<float> z(output_size, 0.0f);
 
-        // Standard matrix multiplication and bias addition
         for (int i = 0; i < output_size; ++i) {
             for (int j = 0; j < input_size; ++j) {
                 z[i] += w[i * input_size + j] * current_activation[j];
@@ -95,7 +86,6 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
             z[i] += b[i];
         }
 
-        // Apply activation functions
         if (layer == dense_weights.size() - 1) { // Softmax for the final classification
             float max_z = *std::max_element(z.begin(), z.end());
             float sum_exp = 0.0f;
@@ -103,17 +93,16 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
             for (float& val : z) val = std::exp(val - max_z) / sum_exp;
             current_activation = z;
         }
-        else { // Tanh for all other hidden layers
+        else { // Tanh for hidden layers
             for (float& val : z) val = std::tanh(val);
             current_activation = z;
         }
 
-        // Apply the self-attention mechanism after the first dense layer
+        // Apply self-attention after the first dense layer
         if (layer == 0) {
             const auto& hidden_activations = current_activation;
             int hidden_size = hidden_activations.size();
 
-            // Project activations to Query and Key vectors
             std::vector<float> query(attention_dim, 0.0f), key(attention_dim, 0.0f);
             for (int j = 0; j < attention_dim; ++j) {
                 for (int k = 0; k < hidden_size; ++k) {
@@ -121,15 +110,13 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
                     key[j] += W_k[j * hidden_size + k] * hidden_activations[k];
                 }
             }
-            // Calculate a single attention score
             float score = 0.0f;
             for (int j = 0; j < attention_dim; ++j) score += query[j] * key[j];
             score /= std::sqrt(static_cast<float>(attention_dim));
 
-            // Calculate a gating weight using sigmoid
             float attention_weight = 1.0f / (1.0f + std::exp(-score));
 
-            // Apply the gate to the activations, re-weighing them
+            // Apply the gate to the activations
             for (float& val : current_activation) {
                 val *= attention_weight;
             }
@@ -139,7 +126,6 @@ std::vector<float> DNN::forward(const std::vector<float>& input) {
 }
 
 
-// --- Training Loop ---
 void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector<std::vector<float>>& targets, int epochs, float learning_rate) {
     for (int epoch = 0; epoch < epochs; ++epoch) {
         float total_loss = 0.0f;
@@ -151,7 +137,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
             const auto& input = inputs[i];
             const auto& target = targets[i];
 
-            // --- 1. FORWARD PASS (storing all intermediate values for backprop) ---
+            // --- 1. FORWARD PASS (storing intermediate values) ---
 
             // a. Convolutional Layer
             int conv_output_length = input.size() - filter_size + 1;
@@ -167,7 +153,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                 }
             }
 
-            // b. Max Pooling Layer (storing indices of max values)
+            // b. Max Pooling Layer (storing indices)
             int pool_output_length = conv_output_length / 2;
             std::vector<float> pool_output(pool_output_length * num_filters);
             std::vector<int> max_indices(pool_output_length * num_filters);
@@ -252,8 +238,11 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
 
             // a. Initial Delta (from Cross-Entropy Loss + Softmax)
             std::vector<float> delta = final_prediction;
-            delta[0] -= target[0];
-            delta[1] -= target[1];
+            // ***** CRITICAL BUG FIX *****
+            // The original code was hardcoded for 2 classes. This is the general form.
+            for (int j = 0; j < this->num_classes; ++j) {
+                delta[j] -= target[j];
+            }
 
             std::vector<std::vector<float>> nabla_dense_w(dense_weights.size());
             std::vector<std::vector<float>> nabla_dense_b(dense_biases.size());
@@ -301,7 +290,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
                 nabla_query[j] = nabla_score * key[j] * scale;
                 nabla_key[j] = nabla_score * query[j] * scale;
             }
-            std::vector<float> nabla_Wq(W_q.size()), nabla_Wk(W_k.size());
+            std::vector<float> nabla_Wq(W_q.size(), 0.0f), nabla_Wk(W_k.size(), 0.0f);
             int hidden_size = h1_pre_attention.size();
             for (int j = 0; j < attention_dim; ++j) {
                 for (int k = 0; k < hidden_size; ++k) {
@@ -379,7 +368,7 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
     }
 }
 
-// --- Helper Implementations ---
+// --- Helper Implementations (from DNN.cpp) ---
 std::vector<float> DNN::xavier_weights(int input_size, int output_size) {
     float limit = std::sqrt(6.0f / (input_size + output_size));
     std::uniform_real_distribution<float> dist(-limit, limit);
@@ -405,3 +394,5 @@ std::vector<float> DNN::tanh_derivative(const std::vector<float>& activated_outp
 float DNN::sigmoid_derivative(float activated_output) {
     return activated_output * (1.0f - activated_output);
 }
+
+

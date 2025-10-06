@@ -35,10 +35,10 @@ void train_model(std::string model) {
 			int num_classes = datasets.training_targets[0].size();
 
 			// Architectural choices for the new layers
-			std::vector<int> hidden_layers = { 10 }; // A single hidden layer of 10 neurons for the dense part
-			int num_filters = 4;                   // Use 4 convolutional filters to find patterns
-			int filter_size = 3;                   // Each filter will look at 3 features at a time
-			int attention_dim = 8;                 // The internal dimension for the Q and K vectors
+			std::vector<int> hidden_layers = { 64, 32 };
+			int num_filters = 16;
+			int filter_size = 3;
+			int attention_dim = 24;
 
 			// Sanity check: The input sequence must be at least as long as the filter
 			if (input_sequence_length < filter_size) {
@@ -50,7 +50,7 @@ void train_model(std::string model) {
 				num_filters, filter_size, attention_dim);
 
 			std::cout << "\nStarting training on K2 data with Hybrid CNN-Attention model..." << std::endl;
-			network.train(datasets.training_inputs, datasets.training_targets, 200, 0.01f);
+			network.train(datasets.training_inputs, datasets.training_targets, 500, 0.005f);
 			std::cout << "Training complete." << std::endl;
 			std::cout << "--------------------" << std::endl;
 

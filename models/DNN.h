@@ -4,6 +4,7 @@
 #include <numeric>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 class DNN {
 public:
@@ -22,6 +23,7 @@ private:
     int num_filters;
     int filter_size;
     int attention_dim;
+    int num_classes;
 
     // --- Learnable Parameters ---
     // Convolutional Layer
