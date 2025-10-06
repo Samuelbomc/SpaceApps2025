@@ -1,5 +1,5 @@
 ﻿#include "SpaceApps2025.h"
 
 int main() {
-	train_model("K2");
+	train_model("kepler");
 }

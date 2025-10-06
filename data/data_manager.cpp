@@ -219,4 +219,268 @@ namespace data {
 
 		return result;
 	}
+
+	DatasetSplit data_manager::load_and_split_tess_data(const std::string& filepath, float train_split_ratio) {
+		std::ifstream file(filepath);
+		if (!file.is_open()) {
+			throw std::runtime_error("Could not open TESS data file: " + filepath);
+		}
+
+		// --- 1. Load ALL raw data and targets from the TESS CSV ---
+		std::vector<std::vector<std::string>> all_raw_features;
+		std::vector<std::vector<float>> all_targets;
+		std::string line;
+		std::getline(file, line); // Skip header
+
+		while (std::getline(file, line)) {
+			auto row = split_csv_line(line);
+			if (row.size() <= tess_useful_feature_indices.back()) continue;
+
+			if (row[tess_target_column_index] != "KP" && row[tess_target_column_index] != "FP" && row[tess_target_column_index] != "CP" && row[tess_target_column_index] != "FA") continue;
+
+			std::vector<std::string> feature_row;
+			for (int idx : tess_useful_feature_indices) {
+				feature_row.push_back(row[idx]);
+			}
+			all_raw_features.push_back(feature_row);
+
+			// One-hot encode the target: [1,0] for Known Planet, [0,1] for False Positive
+			if (row[tess_target_column_index] == "KP" || row[tess_target_column_index] == "CP") {
+				all_targets.push_back({ 1.0f, 0.0f });
+			}
+			else if (row[tess_target_column_index] == "FP" || row[tess_target_column_index] == "FA") {
+				all_targets.push_back({ 0.0f, 1.0f });
+			}
+		}
+
+		if (all_raw_features.empty()) {
+			throw std::runtime_error("No valid KP or FP data found in the TESS file.");
+		}
+
+		// --- 2. Shuffle indices to randomize the data ---
+		std::vector<int> indices(all_raw_features.size());
+		std::iota(indices.begin(), indices.end(), 0);
+		std::shuffle(indices.begin(), indices.end(), std::mt19937{ std::random_device{}() });
+
+		// --- 3. Split the raw data into training and testing sets ---
+		int train_size = static_cast<int>(all_raw_features.size() * train_split_ratio);
+		std::vector<std::vector<std::string>> raw_training_features;
+		std::vector<std::vector<float>> training_targets;
+		std::vector<std::vector<std::string>> raw_testing_features;
+		std::vector<std::vector<float>> testing_targets;
+
+		for (size_t i = 0; i < all_raw_features.size(); ++i) {
+			int shuffled_idx = indices[i];
+			if (i < train_size) {
+				raw_training_features.push_back(all_raw_features[shuffled_idx]);
+				training_targets.push_back(all_targets[shuffled_idx]);
+			}
+			else {
+				raw_testing_features.push_back(all_raw_features[shuffled_idx]);
+				testing_targets.push_back(all_targets[shuffled_idx]);
+			}
+		}
+
+		// --- 4. Calculate normalization stats ONLY from the training data ---
+		int num_features = tess_useful_feature_indices.size();
+		feature_means.assign(num_features, 0.0f);
+		feature_std_devs.assign(num_features, 0.0f);
+		std::vector<int> counts(num_features, 0);
+
+		for (const auto& row : raw_training_features) {
+			for (int i = 0; i < num_features; ++i) {
+				if (!row[i].empty()) {
+					try {
+						feature_means[i] += std::stof(row[i]);
+						counts[i]++;
+					}
+					catch (...) {}
+				}
+			}
+		}
+		for (int i = 0; i < num_features; ++i) {
+			if (counts[i] > 0) feature_means[i] /= counts[i];
+		}
+
+		counts.assign(num_features, 0);
+		for (const auto& row : raw_training_features) {
+			for (int i = 0; i < num_features; ++i) {
+				if (!row[i].empty()) {
+					try {
+						float val = std::stof(row[i]);
+						feature_std_devs[i] += (val - feature_means[i]) * (val - feature_means[i]);
+						counts[i]++;
+					}
+					catch (...) {}
+				}
+			}
+		}
+		for (int i = 0; i < num_features; ++i) {
+			if (counts[i] > 1) {
+				feature_std_devs[i] = std::sqrt(feature_std_devs[i] / (counts[i] - 1));
+			}
+			else {
+				feature_std_devs[i] = 1.0f;
+			}
+		}
+
+		// --- 5. Normalize both datasets and return ---
+		DatasetSplit result;
+		result.training_targets = training_targets;
+		result.testing_targets = testing_targets;
+
+		for (const auto& row : raw_training_features) {
+			std::vector<float> processed_row;
+			for (int i = 0; i < num_features; ++i) {
+				float value = feature_means[i];
+				if (!row[i].empty()) { try { value = std::stof(row[i]); } catch (...) {} }
+				processed_row.push_back((value - feature_means[i]) / (feature_std_devs[i] + 1e-9));
+			}
+			result.training_inputs.push_back(processed_row);
+		}
+
+		for (const auto& row : raw_testing_features) {
+			std::vector<float> processed_row;
+			for (int i = 0; i < num_features; ++i) {
+				float value = feature_means[i];
+				if (!row[i].empty()) { try { value = std::stof(row[i]); } catch (...) {} }
+				processed_row.push_back((value - feature_means[i]) / (feature_std_devs[i] + 1e-9));
+			}
+			result.testing_inputs.push_back(processed_row);
+		}
+
+		return result;
+	}
+
+	DatasetSplit data_manager::load_and_split_kepler_data(const std::string& filepath, float train_split_ratio) {
+		std::ifstream file(filepath);
+		if (!file.is_open()) {
+			throw std::runtime_error("Could not open Kepler data file: " + filepath);
+		}
+
+		// --- 1. Load ALL raw data and targets from the Kepler CSV ---
+		std::vector<std::vector<std::string>> all_raw_features;
+		std::vector<std::vector<float>> all_targets;
+		std::string line;
+		std::getline(file, line); // Skip header
+
+		while (std::getline(file, line)) {
+			auto row = split_csv_line(line);
+			if (row.size() <= kepler_useful_feature_indices.back()) continue;
+			// Filter for only clear positive ("CONFIRMED") and negative ("FALSE POSITIVE") cases
+			if (row[kepler_target_column_index] != "CONFIRMED" && row[kepler_target_column_index] != "FALSE POSITIVE") continue;
+
+			std::vector<std::string> feature_row;
+			for (int idx : kepler_useful_feature_indices) {
+				feature_row.push_back(row[idx]);
+			}
+			all_raw_features.push_back(feature_row);
+
+			// One-hot encode the target: [1,0] for CONFIRMED, [0,1] for FALSE POSITIVE
+			if (row[kepler_target_column_index] == "CONFIRMED") {
+				all_targets.push_back({ 1.0f, 0.0f });
+			}
+			else if (row[kepler_target_column_index] == "FALSE POSITIVE") {
+				all_targets.push_back({ 0.0f, 1.0f });
+			}
+		}
+
+		if (all_raw_features.empty()) {
+			throw std::runtime_error("No valid CONFIRMED or FALSE POSITIVE data found in the Kepler file.");
+		}
+
+		// --- 2. Shuffle indices to randomize the data ---
+		std::vector<int> indices(all_raw_features.size());
+		std::iota(indices.begin(), indices.end(), 0);
+		std::shuffle(indices.begin(), indices.end(), std::mt19937{ std::random_device{}() });
+
+		// --- 3. Split the raw data into training and testing sets ---
+		int train_size = static_cast<int>(all_raw_features.size() * train_split_ratio);
+		std::vector<std::vector<std::string>> raw_training_features;
+		std::vector<std::vector<float>> training_targets;
+		std::vector<std::vector<std::string>> raw_testing_features;
+		std::vector<std::vector<float>> testing_targets;
+
+		for (size_t i = 0; i < all_raw_features.size(); ++i) {
+			int shuffled_idx = indices[i];
+			if (i < train_size) {
+				raw_training_features.push_back(all_raw_features[shuffled_idx]);
+				training_targets.push_back(all_targets[shuffled_idx]);
+			}
+			else {
+				raw_testing_features.push_back(all_raw_features[shuffled_idx]);
+				testing_targets.push_back(all_targets[shuffled_idx]);
+			}
+		}
+
+		// --- 4. Calculate normalization stats ONLY from the training data ---
+		int num_features = kepler_useful_feature_indices.size();
+		feature_means.assign(num_features, 0.0f);
+		feature_std_devs.assign(num_features, 0.0f);
+		std::vector<int> counts(num_features, 0);
+
+		for (const auto& row : raw_training_features) {
+			for (int i = 0; i < num_features; ++i) {
+				if (!row[i].empty()) {
+					try {
+						feature_means[i] += std::stof(row[i]);
+						counts[i]++;
+					}
+					catch (...) {}
+				}
+			}
+		}
+		for (int i = 0; i < num_features; ++i) {
+			if (counts[i] > 0) feature_means[i] /= counts[i];
+		}
+
+		counts.assign(num_features, 0);
+		for (const auto& row : raw_training_features) {
+			for (int i = 0; i < num_features; ++i) {
+				if (!row[i].empty()) {
+					try {
+						float val = std::stof(row[i]);
+						feature_std_devs[i] += (val - feature_means[i]) * (val - feature_means[i]);
+						counts[i]++;
+					}
+					catch (...) {}
+				}
+			}
+		}
+		for (int i = 0; i < num_features; ++i) {
+			if (counts[i] > 1) {
+				feature_std_devs[i] = std::sqrt(feature_std_devs[i] / (counts[i] - 1));
+			}
+			else {
+				feature_std_devs[i] = 1.0f;
+			}
+		}
+
+		// --- 5. Normalize both datasets and return ---
+		DatasetSplit result;
+		result.training_targets = training_targets;
+		result.testing_targets = testing_targets;
+
+		for (const auto& row : raw_training_features) {
+			std::vector<float> processed_row;
+			for (int i = 0; i < num_features; ++i) {
+				float value = feature_means[i];
+				if (!row[i].empty()) { try { value = std::stof(row[i]); } catch (...) {} }
+				processed_row.push_back((value - feature_means[i]) / (feature_std_devs[i] + 1e-9));
+			}
+			result.training_inputs.push_back(processed_row);
+		}
+
+		for (const auto& row : raw_testing_features) {
+			std::vector<float> processed_row;
+			for (int i = 0; i < num_features; ++i) {
+				float value = feature_means[i];
+				if (!row[i].empty()) { try { value = std::stof(row[i]); } catch (...) {} }
+				processed_row.push_back((value - feature_means[i]) / (feature_std_devs[i] + 1e-9));
+			}
+			result.testing_inputs.push_back(processed_row);
+		}
+
+		return result;
+	}
 } // namespace data
