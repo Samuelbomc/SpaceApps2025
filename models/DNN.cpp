@@ -238,8 +238,6 @@ void DNN::train(const std::vector<std::vector<float>>& inputs, const std::vector
 
             // a. Initial Delta (from Cross-Entropy Loss + Softmax)
             std::vector<float> delta = final_prediction;
-            // ***** CRITICAL BUG FIX *****
-            // The original code was hardcoded for 2 classes. This is the general form.
             for (int j = 0; j < this->num_classes; ++j) {
                 delta[j] -= target[j];
             }
